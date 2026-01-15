@@ -1,14 +1,22 @@
 import React, { useState, useEffect } from 'react'
 import initialList from '../data/initialList'
+import { toast, Flip } from 'react-toastify'
 
 const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
 
 const Current = () => {
-	const isFirstVisit = !localStorage.getItem('visitedBefore')
-	const isMonday = new Date().getDay() === 1
-	// const isMonday = true
 
-	const canEditTasks = isFirstVisit || isMonday
+	const [isFirstVisit, setIsFirstVisit] = useState(
+		!localStorage.getItem('visitedBefore')
+	)
+
+	const isMonday = new Date().getDay() === 1
+
+	const todayIndex = (() => {
+		const d = new Date().getDay()
+		return d === 0 ? 6 : d - 1
+	})()
+
 	// ===== CURRENT WEEK TRACKER =====
 	const [tracker, setTracker] = useState(() => {
 		const saved = localStorage.getItem('tracker')
@@ -20,6 +28,14 @@ const Current = () => {
 				days: Array(7).fill(false),
 			}))
 	})
+
+	const liveCompleted = tracker.reduce(
+		(sum, task) => sum + task.days.filter(Boolean).length,
+		0
+	)
+
+	const liveTotal = tracker.length * 7
+
 
 	useEffect(() => {
 		localStorage.setItem('tracker', JSON.stringify(tracker))
@@ -54,6 +70,7 @@ const Current = () => {
 		)
 	}
 
+
 	// ===== UPDATE TITLE (MONDAY ONLY) =====
 	const updateTitle = (id, value) => {
 		if (!canEditTasks) return
@@ -64,6 +81,19 @@ const Current = () => {
 			)
 		)
 	}
+
+		const finalizeTitle = (id, value) => {
+		const trimmed = value.trim()
+
+		setTracker(prev =>
+			prev.map(task =>
+				task.id === id
+					? { ...task, title: trimmed || task.title }
+					: task
+			)
+		)
+	}
+
 
 	// ===== ADD TASK (MONDAY ONLY) =====
 	const addTask = () => {
@@ -130,6 +160,10 @@ const Current = () => {
 				days: Array(7).fill(false),
 			}))
 		)
+
+		localStorage.removeItem('lockedWeek')
+		setIsLocked(false)
+
 	}
 	// ===== saving weeks to localStorage =====
 	useEffect(() => {
@@ -147,21 +181,52 @@ const Current = () => {
 		}, 60 * 1000) // check every minute
 
 		return () => clearInterval(interval)
-	}, [weekKey])
+	}, [weekKey, tracker])
 
-	const todayIndex = (() => {
-		const d = new Date().getDay()
-		return d === 0 ? 6 : d - 1
-	})()
+	const [isLocked, setIsLocked] = useState(() => {
+		const saved = localStorage.getItem('lockedWeek')
+		return saved === getWeekKey()
+	})
+
+	const canEditTasks = !isLocked && (isFirstVisit || isMonday)
+
 
 	const lockTasks = () => {
 		localStorage.setItem('visitedBefore', 'true')
+		localStorage.setItem('lockedWeek', getWeekKey())
+		setIsLocked(true)
+		setIsFirstVisit(false)
+
+		toast.success('Locked In for Week', {
+			position: "bottom-center",
+			autoClose: 1000,
+			hideProgressBar: false,
+			closeOnClick: true,
+			pauseOnHover: false,
+			draggable: true,
+			progress: undefined,
+			theme: "dark",
+			transition: Flip,
+		});
 	}
-
-
 
 	return (
 		<div className="w-[80vw] h-full pt-30 flex flex-col gap-1 items-center">
+
+			<div className="absolute bg-neutral-800 h-max w-max flex flex-col gap-1 py-4 px-6 rounded-xl top-2 right-2">
+				<p className="text-white w-max opacity-80">
+					This week: {liveCompleted} / {liveTotal}
+				</p>
+
+				<div className="w-full h-2 bg-neutral-700 rounded">
+					<div
+						className="h-2 bg-green-400 rounded transition-all"
+						style={{ width: `${(liveCompleted / liveTotal) * 100 || 0}%` }}
+					/>
+				</div>
+
+
+			</div>
 
 			<div className="w-[76%] h-max flex justify-center">
 				{/* TASK LIST */}
@@ -179,6 +244,7 @@ const Current = () => {
 								<input
 									value={task.title}
 									onChange={e => updateTitle(task.id, e.target.value)}
+									onBlur={e => finalizeTitle(task.id, e.target.value)}
 									className="bg-transparent outline-none text-white flex-1"
 								/>
 							) : (
@@ -202,10 +268,13 @@ const Current = () => {
 				<div className=" h-max flex flex-col gap-1">
 
 					{/* DAY NAMES */}
-					<ul className="flex h-12 text-white">
-						{DAYS.map(day => (
-							<li key={day} className="w-24 text-center">{day}</li>
-						))}
+					<ul className="flex h-12 text-white/50">
+						{DAYS.map((day,i) => {
+							const isToday = i===todayIndex;
+
+							return (
+							<li key={day} className={`w-24 flex justify-center items-center text-center ${isToday ? 'text-white text-shadow-[0_0_36px_white]' : ''}`}>{day}</li>
+						)})}
 					</ul>
 
 					{/* GRID */}
@@ -221,6 +290,7 @@ const Current = () => {
 											key={col}
 											onClick={() => {
 												if (isPastDay) return
+												if (col != todayIndex) return 
 												toggleDayCheck(row, col)
 											}}
 											className={`w-8 h-8 rounded cursor-pointer transition
@@ -252,14 +322,14 @@ const Current = () => {
 
 			<div className="flex w-[76%] h-max gap-6">
 				{canEditTasks && (
-					<button 
-						onClick={addTask} 
+					<button
+						onClick={addTask}
 						className="h-16 w-66 text-white px-4 gap-2 rounded-lg bg-neutral-800 hover:bg-neutral-800/80 cursor-pointer transition">
 						+ Add task
 					</button>
 				)}
 
-				{isFirstVisit && (
+				{!isLocked && (isFirstVisit || isMonday) && (
 					<button
 						onClick={lockTasks}
 						className="h-16 w-66 text-white px-4 gap-2 rounded-lg bg-neutral-800 hover:bg-neutral-800/80 cursor-pointer transition"

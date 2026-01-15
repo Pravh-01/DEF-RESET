@@ -16,3 +16,7 @@ body {
   min-width: 320px;
   background: #000;
 }
+
+*::-webkit-scrollbar {
+  width: 0;
+}
