@@ -27,7 +27,10 @@ const Current = () => {
 		return `${year}-W${week}`
 	}
 
-	// ===== CURRENT WEEK TRACKER =====
+	// ===== WEEK KEY =====
+	const [weekKey, setWeekKey] = useState(getWeekKey())
+
+	// ===== TRACKER =====
 	const [tracker, setTracker] = useState(() => {
 		const saved = localStorage.getItem('tracker')
 		return saved
@@ -45,16 +48,13 @@ const Current = () => {
 	)
 	const liveTotal = tracker.length * 7
 
-	// ===== WEEK KEY =====
-	const [weekKey, setWeekKey] = useState(getWeekKey())
-
-	// ===== SAVE TRACKER + TRACKER WEEK =====
+	// ===== SAVE TRACKER + WEEK =====
 	useEffect(() => {
 		localStorage.setItem('tracker', JSON.stringify(tracker))
 		localStorage.setItem('trackerWeek', weekKey)
 	}, [tracker, weekKey])
 
-	// ===== TOGGLE DAY =====
+	// ===== TOGGLE =====
 	const toggleDayCheck = (taskIndex, dayIndex) => {
 		setTracker(prev =>
 			prev.map((task, i) =>
@@ -70,9 +70,9 @@ const Current = () => {
 		)
 	}
 
-	// ===== EDIT TASK TITLE =====
-	const canEditTasks = !localStorage.getItem('lockedWeek') &&
-		(isFirstVisit || isMonday)
+	// ===== EDIT RULES =====
+	const isLocked = localStorage.getItem('lockedWeek') === weekKey
+	const canEditTasks = !isLocked && (isFirstVisit || isMonday)
 
 	const updateTitle = (id, value) => {
 		if (!canEditTasks) return
@@ -94,7 +94,6 @@ const Current = () => {
 		)
 	}
 
-	// ===== ADD / REMOVE TASK =====
 	const addTask = () => {
 		if (!canEditTasks) return
 		setTracker(prev => [
@@ -130,33 +129,22 @@ const Current = () => {
 		}
 	}
 
+	// ===== HISTORY =====
 	const [weeks, setWeeks] = useState(() => {
 		const saved = localStorage.getItem('weeks')
 		return saved ? JSON.parse(saved) : []
 	})
 
-	// ===== SAVE WEEK =====
-	const createNewWeek = finishedWeekKey => {
+	const saveFinishedWeek = (finishedWeekKey, finishedTracker) => {
 		const finishedWeek = {
 			weekId: finishedWeekKey,
-			tasks: tracker,
-			stats: computeStats(tracker),
+			tasks: finishedTracker,
+			stats: computeStats(finishedTracker),
 		}
 
 		setWeeks(prev => [...prev, finishedWeek])
-
-		setTracker(prev =>
-			prev.map((t, i) => ({
-				...t,
-				id: i + 1,
-				days: Array(7).fill(false),
-			}))
-		)
-
-		localStorage.removeItem('lockedWeek')
 	}
 
-	// ===== SAVE WEEKS =====
 	useEffect(() => {
 		localStorage.setItem('weeks', JSON.stringify(weeks))
 	}, [weeks])
@@ -167,29 +155,52 @@ const Current = () => {
 		const currentWeek = getWeekKey()
 
 		if (savedWeek && savedWeek !== currentWeek) {
-			createNewWeek(savedWeek)
-			setWeekKey(currentWeek)
+			const savedTracker = JSON.parse(localStorage.getItem('tracker'))
+
+			saveFinishedWeek(savedWeek, savedTracker)
+
+			setTracker(
+				savedTracker.map((t, i) => ({
+					...t,
+					id: i + 1,
+					days: Array(7).fill(false),
+				}))
+			)
+
 			localStorage.setItem('trackerWeek', currentWeek)
+			localStorage.removeItem('lockedWeek')
+			setWeekKey(currentWeek)
 		}
 	}, [])
 
-	// ===== INTERVAL WEEK CHECK =====
+	// ===== WEEK CHANGE INTERVAL =====
 	useEffect(() => {
 		const interval = setInterval(() => {
 			const currentKey = getWeekKey()
 			if (currentKey !== weekKey) {
-				createNewWeek(weekKey)
+				saveFinishedWeek(weekKey, tracker)
+
+				setTracker(prev =>
+					prev.map((t, i) => ({
+						...t,
+						id: i + 1,
+						days: Array(7).fill(false),
+					}))
+				)
+
+				localStorage.setItem('trackerWeek', currentKey)
+				localStorage.removeItem('lockedWeek')
 				setWeekKey(currentKey)
 			}
 		}, 60 * 1000)
 
 		return () => clearInterval(interval)
-	}, [weekKey])
+	}, [weekKey, tracker])
 
-	// ===== LOCK TASKS =====
+	// ===== LOCK =====
 	const lockTasks = () => {
 		localStorage.setItem('visitedBefore', 'true')
-		localStorage.setItem('lockedWeek', getWeekKey())
+		localStorage.setItem('lockedWeek', weekKey)
 		setIsFirstVisit(false)
 
 		toast.success('Locked In for Week', {
@@ -216,10 +227,9 @@ const Current = () => {
 				</div>
 			</div>
 
-			{/* MAIN */}
 			<div className="w-[76%] flex justify-center">
 
-				{/* TASK LIST */}
+				{/* TASKS */}
 				<ul className="w-66 text-white">
 					<li className="h-12" />
 					{tracker.map(task => (
@@ -301,12 +311,11 @@ const Current = () => {
 					</button>
 				)}
 
-				{!localStorage.getItem('lockedWeek') &&
-					(isFirstVisit || isMonday) && (
-						<button onClick={lockTasks} className="bg-neutral-800 h-16 w-66">
-							◇ Lock tasks
-						</button>
-					)}
+				{!isLocked && (isFirstVisit || isMonday) && (
+					<button onClick={lockTasks} className="bg-neutral-800 h-16 w-66">
+						◇ Lock tasks
+					</button>
+				)}
 			</div>
 		</div>
 	)
