@@ -5,7 +5,6 @@ import { toast, Flip } from 'react-toastify'
 const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
 
 const Current = () => {
-
 	const [isFirstVisit, setIsFirstVisit] = useState(
 		!localStorage.getItem('visitedBefore')
 	)
@@ -16,6 +15,17 @@ const Current = () => {
 		const d = new Date().getDay()
 		return d === 0 ? 6 : d - 1
 	})()
+
+	const getWeekKey = () => {
+		const now = new Date()
+		const year = now.getFullYear()
+		const week = Math.ceil(
+			(((now - new Date(year, 0, 1)) / 86400000) +
+				new Date(year, 0, 1).getDay() +
+				1) / 7
+		)
+		return `${year}-W${week}`
+	}
 
 	// ===== CURRENT WEEK TRACKER =====
 	const [tracker, setTracker] = useState(() => {
@@ -33,26 +43,16 @@ const Current = () => {
 		(sum, task) => sum + task.days.filter(Boolean).length,
 		0
 	)
-
 	const liveTotal = tracker.length * 7
 
+	// ===== WEEK KEY =====
+	const [weekKey, setWeekKey] = useState(getWeekKey())
 
+	// ===== SAVE TRACKER + TRACKER WEEK =====
 	useEffect(() => {
 		localStorage.setItem('tracker', JSON.stringify(tracker))
-	}, [tracker])
-
-
-	const getWeekKey = () => {
-		const now = new Date()
-		const year = now.getFullYear()
-		const week = Math.ceil(
-			(((now - new Date(year, 0, 1)) / 86400000) + new Date(year, 0, 1).getDay() + 1) / 7
-		)
-		return `${year}-W${week}`
-	}
-
-	// ===== PAST WEEKS =====
-	const [weekKey, setWeekKey] = useState(getWeekKey())
+		localStorage.setItem('trackerWeek', weekKey)
+	}, [tracker, weekKey])
 
 	// ===== TOGGLE DAY =====
 	const toggleDayCheck = (taskIndex, dayIndex) => {
@@ -70,11 +70,12 @@ const Current = () => {
 		)
 	}
 
+	// ===== EDIT TASK TITLE =====
+	const canEditTasks = !localStorage.getItem('lockedWeek') &&
+		(isFirstVisit || isMonday)
 
-	// ===== UPDATE TITLE (MONDAY ONLY) =====
 	const updateTitle = (id, value) => {
 		if (!canEditTasks) return
-
 		setTracker(prev =>
 			prev.map(task =>
 				task.id === id ? { ...task, title: value } : task
@@ -82,9 +83,8 @@ const Current = () => {
 		)
 	}
 
-		const finalizeTitle = (id, value) => {
+	const finalizeTitle = (id, value) => {
 		const trimmed = value.trim()
-
 		setTracker(prev =>
 			prev.map(task =>
 				task.id === id
@@ -94,11 +94,9 @@ const Current = () => {
 		)
 	}
 
-
-	// ===== ADD TASK (MONDAY ONLY) =====
+	// ===== ADD / REMOVE TASK =====
 	const addTask = () => {
 		if (!canEditTasks) return
-
 		setTracker(prev => [
 			...prev,
 			{
@@ -109,28 +107,22 @@ const Current = () => {
 		])
 	}
 
-	// ===== REMOVE TASK + RENUMBER (MONDAY ONLY) =====
-	const removeTask = (id) => {
+	const removeTask = id => {
 		if (!canEditTasks) return
-
 		setTracker(prev =>
 			prev
-				.filter(task => task.id !== id)
-				.map((task, index) => ({
-					...task,
-					id: index + 1,
-				}))
+				.filter(t => t.id !== id)
+				.map((t, i) => ({ ...t, id: i + 1 }))
 		)
 	}
 
-	// ===== COMPUTE STATS =====
-	const computeStats = (tasks) => {
+	// ===== STATS =====
+	const computeStats = tasks => {
 		const total = tasks.length * 7
 		const completed = tasks.reduce(
 			(sum, t) => sum + t.days.filter(Boolean).length,
 			0
 		)
-
 		return {
 			total,
 			completed,
@@ -143,10 +135,10 @@ const Current = () => {
 		return saved ? JSON.parse(saved) : []
 	})
 
-	// ===== SAVE WEEK + RESET =====
-	const createNewWeek = () => {
+	// ===== SAVE WEEK =====
+	const createNewWeek = finishedWeekKey => {
 		const finishedWeek = {
-			weekId: weekKey,
+			weekId: finishedWeekKey,
 			tasks: tracker,
 			stats: computeStats(tracker),
 		}
@@ -154,98 +146,95 @@ const Current = () => {
 		setWeeks(prev => [...prev, finishedWeek])
 
 		setTracker(prev =>
-			prev.map((task, i) => ({
-				...task,
+			prev.map((t, i) => ({
+				...t,
 				id: i + 1,
 				days: Array(7).fill(false),
 			}))
 		)
 
 		localStorage.removeItem('lockedWeek')
-		setIsLocked(false)
-
 	}
-	// ===== saving weeks to localStorage =====
+
+	// ===== SAVE WEEKS =====
 	useEffect(() => {
 		localStorage.setItem('weeks', JSON.stringify(weeks))
 	}, [weeks])
 
-	// ===== new week when needed =====
+	// ===== HANDLE MISSED WEEK ON LOAD =====
+	useEffect(() => {
+		const savedWeek = localStorage.getItem('trackerWeek')
+		const currentWeek = getWeekKey()
+
+		if (savedWeek && savedWeek !== currentWeek) {
+			createNewWeek(savedWeek)
+			setWeekKey(currentWeek)
+			localStorage.setItem('trackerWeek', currentWeek)
+		}
+	}, [])
+
+	// ===== INTERVAL WEEK CHECK =====
 	useEffect(() => {
 		const interval = setInterval(() => {
 			const currentKey = getWeekKey()
 			if (currentKey !== weekKey) {
-				createNewWeek()
+				createNewWeek(weekKey)
 				setWeekKey(currentKey)
 			}
-		}, 60 * 1000) // check every minute
+		}, 60 * 1000)
 
 		return () => clearInterval(interval)
-	}, [weekKey, tracker])
+	}, [weekKey])
 
-	const [isLocked, setIsLocked] = useState(() => {
-		const saved = localStorage.getItem('lockedWeek')
-		return saved === getWeekKey()
-	})
-
-	const canEditTasks = !isLocked && (isFirstVisit || isMonday)
-
-
+	// ===== LOCK TASKS =====
 	const lockTasks = () => {
 		localStorage.setItem('visitedBefore', 'true')
 		localStorage.setItem('lockedWeek', getWeekKey())
-		setIsLocked(true)
 		setIsFirstVisit(false)
 
 		toast.success('Locked In for Week', {
-			position: "bottom-center",
+			position: 'bottom-center',
 			autoClose: 1000,
-			hideProgressBar: false,
-			closeOnClick: true,
-			pauseOnHover: false,
-			draggable: true,
-			progress: undefined,
-			theme: "dark",
+			theme: 'dark',
 			transition: Flip,
-		});
+		})
 	}
 
 	return (
-		<div className="w-[80vw] h-full pt-30 flex flex-col gap-1 items-center">
+		<div className="w-[80vw] h-full pt-30 flex flex-col items-center">
 
-			<div className="absolute bg-neutral-800 h-max w-max flex flex-col gap-1 py-4 px-6 rounded-xl top-2 right-2">
-				<p className="text-white w-max opacity-80">
+			{/* STATS */}
+			<div className="absolute top-2 right-2 bg-neutral-800 px-6 py-4 rounded-xl text-white">
+				<p className="opacity-80">
 					This week: {liveCompleted} / {liveTotal}
 				</p>
-
-				<div className="w-full h-2 bg-neutral-700 rounded">
+				<div className="h-2 bg-neutral-700 rounded">
 					<div
-						className="h-2 bg-green-400 rounded transition-all"
+						className="h-2 bg-green-400 rounded"
 						style={{ width: `${(liveCompleted / liveTotal) * 100 || 0}%` }}
 					/>
 				</div>
-
-
 			</div>
 
-			<div className="w-[76%] h-max flex justify-center">
-				{/* TASK LIST */}
-				<ul className=" w-66 h-max flex flex-col gap-1 text-white">
-					<li className="h-12" />
+			{/* MAIN */}
+			<div className="w-[76%] flex justify-center">
 
+				{/* TASK LIST */}
+				<ul className="w-66 text-white">
+					<li className="h-12" />
 					{tracker.map(task => (
 						<li
 							key={task.id}
-							className="group flex items-center justify-evenly h-16 px-4 gap-2 rounded-lg hover:bg-neutral-800 transition"
+							className="group flex items-center h-16 px-4 gap-2 rounded-lg hover:bg-neutral-800"
 						>
-							<p className="px-1">{task.id}.</p>
+							<p>{task.id}.</p>
 
 							{canEditTasks ? (
 								<input
 									value={task.title}
 									onChange={e => updateTitle(task.id, e.target.value)}
 									onBlur={e => finalizeTitle(task.id, e.target.value)}
-									className="bg-transparent outline-none text-white flex-1"
+									className="bg-transparent outline-none flex-1"
 								/>
 							) : (
 								<p className="flex-1">{task.title}</p>
@@ -254,90 +243,70 @@ const Current = () => {
 							{canEditTasks && (
 								<button
 									onClick={() => removeTask(task.id)}
-									className=" opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white"
+									className="opacity-0 group-hover:opacity-100"
 								>
 									✕
 								</button>
 							)}
 						</li>
-
 					))}
 				</ul>
 
 				{/* CALENDAR */}
-				<div className=" h-max flex flex-col gap-1">
-
-					{/* DAY NAMES */}
+				<div>
 					<ul className="flex h-12 text-white/50">
-						{DAYS.map((day,i) => {
-							const isToday = i===todayIndex;
-
-							return (
-							<li key={day} className={`w-24 flex justify-center items-center text-center ${isToday ? 'text-white text-shadow-[0_0_36px_white]' : ''}`}>{day}</li>
-						)})}
+						{DAYS.map((day, i) => (
+							<li
+								key={day}
+								className={`w-24 text-center ${i === todayIndex
+										? 'text-white text-shadow-[0_0_36px_white]'
+										: ''
+									}`}
+							>
+								{day}
+							</li>
+						))}
 					</ul>
 
-					{/* GRID */}
-					<div className="flex flex-col gap-1">
-						{tracker.map((task, row) => (
-							<div key={task.id} className="h-16 grid grid-cols-7 place-items-center">
-								{task.days.map((checked, col) => {
-
-									const isPastDay = col < todayIndex
-									const isMissed = isPastDay && !checked
-									return (
-										<div
-											key={col}
-											onClick={() => {
-												if (isPastDay) return
-												if (col != todayIndex) return 
-												toggleDayCheck(row, col)
-											}}
-											className={`w-8 h-8 rounded cursor-pointer transition
-											${checked
-													? 'bg-green-400'
-													: isMissed
-														? 'bg-red-400'
-														: 'bg-white/90'
-												}`}
-										>
-											{/* {checked && (
-												<svg
-													className="w-full h-full pointer-events-none"
-													viewBox="0 0 1024 1024"
-													fill="#000"
-												>
-													<path d="M760 380.4l-61.6-61.6-263.2 263.1-109.6-109.5L264 534l171.2 171.2L760 380.4z" />
-												</svg>
-											)} */}
-										</div>
-									)
-								})}
-							</div>
-						))}
-					</div>
-
+					{tracker.map((task, row) => (
+						<div key={task.id} className="h-16 grid grid-cols-7 place-items-center">
+							{task.days.map((checked, col) => {
+								const isPast = col < todayIndex
+								return (
+									<div
+										key={col}
+										onClick={() => {
+											if (isPast || col !== todayIndex) return
+											toggleDayCheck(row, col)
+										}}
+										className={`w-8 h-8 rounded ${checked
+												? 'bg-green-400'
+												: isPast
+													? 'bg-red-400'
+													: 'bg-white/90'
+											}`}
+									/>
+								)
+							})}
+						</div>
+					))}
 				</div>
 			</div>
 
-			<div className="flex w-[76%] h-max gap-6">
+			{/* ACTIONS */}
+			<div className="flex gap-6 w-[76%]">
 				{canEditTasks && (
-					<button
-						onClick={addTask}
-						className="h-16 w-66 text-white px-4 gap-2 rounded-lg bg-neutral-800 hover:bg-neutral-800/80 cursor-pointer transition">
+					<button onClick={addTask} className="bg-neutral-800 h-16 w-66">
 						+ Add task
 					</button>
 				)}
 
-				{!isLocked && (isFirstVisit || isMonday) && (
-					<button
-						onClick={lockTasks}
-						className="h-16 w-66 text-white px-4 gap-2 rounded-lg bg-neutral-800 hover:bg-neutral-800/80 cursor-pointer transition"
-					>
-						◇ Lock tasks
-					</button>
-				)}
-
+				{!localStorage.getItem('lockedWeek') &&
+					(isFirstVisit || isMonday) && (
+						<button onClick={lockTasks} className="bg-neutral-800 h-16 w-66">
+							◇ Lock tasks
+						</button>
+					)}
 			</div>
 		</div>
 	)
