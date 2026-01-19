@@ -55,14 +55,14 @@ const History = () => {
         <div className="grid h-130 w-200 gap-4 bg-neutral-800/50 p-5 grid-cols-4 grid-rows-4 rounded-lg shadow-md">
 
           <div className="col-span-2 row-span-4 bg-neutral-800/60 rounded-lg shadow-md flex items-center justify-center">
-            <ul className='w-full h-full flex flex-col gap-2 text-white'>
+            <ul className='w-full h-full p-4 flex flex-col gap-2 text-white'>
               {Object.entries(taskStats).map(([title, stat]) => (
                 <li
                   key={title}
-                  className='flex justify-between bg-neutral-800 px-4 py-3 rounded'>
+                  className='flex justify-between bg-neutral-700/80 px-4 py-3 rounded'>
                   <span>{title}</span>
                   <span>
-                    {stat.done}/ {stat.total}
+                    {stat.done} / {stat.total}
                   </span>
                 </li>
               ))}
@@ -73,18 +73,18 @@ const History = () => {
             {lastWeek && (
               <div className='w-full h-full px-6 py-4 text-white '>
                 <p className='opacity-66'>Last week</p>
-                <p className='text-4xl font-semibold'>
-                  {lastWeek.stats.percent}%
-                  </p>
+                <p className='p-5 text-9xl w-full text-center font-semibold'>
+                  {lastWeek.stats.percent}<span className='text-6xl'>%</span>
+                </p>
               </div>
             )}
           </div>
 
-          <div className="col-span-2 row-span-2 bg-neutral-800/60 rounded-lg shadow-md flex items-center justify-center">
-            <ul className="flex flex-col gap-2 text-white">
+          <div className="col-span-2 row-span-2 bg-neutral-800/60 rounded-lg shadow-md flex flex-col items-center ">
+            <ul className="flex w-full p-4 flex-col gap-2 text-white">
               {[...weeks].reverse().map(w => (
-                <li key={w.weekId} className="flex justify-between bg-neutral-800 px-4 py-3 rounded">
-                  <span>{w.weekId}</span>
+                <li key={w.weekId} className="w-full flex justify-between bg-neutral-700/80 px-4 py-3 rounded">
+                  <span>{w.weekId.replace(/^\d{4}-/, '')}</span>
                   <span>{w.stats.percent}%</span>
                 </li>
               ))}

@@ -9,8 +9,7 @@ const Current = () => {
 		!localStorage.getItem('visitedBefore')
 	)
 
-	// const isMonday = new Date().getDay() === 1
-	const isMonday = true
+	const isMonday = new Date().getDay() === 1
 
 	const todayIndex = (() => {
 		const d = new Date().getDay()
@@ -47,6 +46,7 @@ const Current = () => {
 		(sum, task) => sum + task.days.filter(Boolean).length,
 		0
 	)
+	
 	const liveTotal = tracker.length * 7
 
 	// ===== SAVE TRACKER + WEEK =====
@@ -59,7 +59,6 @@ const Current = () => {
 			localStorage.setItem('trackerWeek', getWeekKey())
 		}
 	}, [])
-
 
 	// ===== TOGGLE =====
 	const toggleDayCheck = (taskIndex, dayIndex) => {
@@ -78,7 +77,10 @@ const Current = () => {
 	}
 
 	// ===== EDIT RULES =====
-	const isLocked = localStorage.getItem('lockedWeek') === weekKey
+	const [isLocked, setIsLocked] = useState(() => {
+		return localStorage.getItem('lockedWeek') === weekKey
+	})
+
 	const canEditTasks = !isLocked && (isFirstVisit || isMonday)
 
 	const updateTitle = (id, value) => {
@@ -167,15 +169,17 @@ const Current = () => {
 		}
 
 		if (savedWeek !== currentWeek) {
-			const savedTracker = JSON.parse(localStorage.getItem('tracker')) || []
+			const savedTracker =
+				JSON.parse(localStorage.getItem('tracker')) || []
 
-			const finishedWeek = {
-				weekId: savedWeek,
-				tasks: savedTracker,
-				stats: computeStats(savedTracker),
-			}
-
-			setWeeks(prev => [...prev, finishedWeek])
+			setWeeks(prev => [
+				...prev,
+				{
+					weekId: savedWeek,
+					tasks: savedTracker,
+					stats: computeStats(savedTracker),
+				},
+			])
 
 			setTracker(
 				savedTracker.map((t, i) => ({
@@ -187,22 +191,29 @@ const Current = () => {
 
 			localStorage.setItem('trackerWeek', currentWeek)
 			localStorage.removeItem('lockedWeek')
+			setIsLocked(false)
 			setWeekKey(currentWeek)
 		}
 	}, [])
 
+	// ===== Interval week change --- save the past week =====
 	useEffect(() => {
 		const interval = setInterval(() => {
 			const currentKey = getWeekKey()
+			const storedWeek = localStorage.getItem('trackerWeek')
+
+			// 🔒 load-effect already handled it
+			if (storedWeek !== weekKey) return
 
 			if (currentKey !== weekKey) {
-				const finishedWeek = {
-					weekId: weekKey,
-					tasks: tracker,
-					stats: computeStats(tracker),
-				}
-
-				setWeeks(prev => [...prev, finishedWeek])
+				setWeeks(prev => [
+					...prev,
+					{
+						weekId: weekKey,
+						tasks: tracker,
+						stats: computeStats(tracker),
+					},
+				])
 
 				setTracker(prev =>
 					prev.map((t, i) => ({
@@ -214,18 +225,19 @@ const Current = () => {
 
 				localStorage.setItem('trackerWeek', currentKey)
 				localStorage.removeItem('lockedWeek')
+				setIsLocked(false)
 				setWeekKey(currentKey)
 			}
 		}, 60 * 1000)
 
 		return () => clearInterval(interval)
-	}, [weekKey])   // 🔴 tracker REMOVED from deps
-
+	}, [weekKey, tracker])
 
 	// ===== LOCK =====
 	const lockTasks = () => {
 		localStorage.setItem('visitedBefore', 'true')
 		localStorage.setItem('lockedWeek', weekKey)
+		setIsLocked(true)
 		setIsFirstVisit(false)
 
 		toast.success('Locked In for Week', {
@@ -237,7 +249,7 @@ const Current = () => {
 	}
 
 	return (
-		<div className="w-[80vw] h-full pt-30 flex flex-col items-center">
+		<div className="w-[80vw] h-full pt-30 flex flex-col gap-4 items-center">
 
 			{/* STATS */}
 			<div className="absolute top-2 right-2 bg-neutral-800 px-6 py-4 rounded-xl text-white">
@@ -252,10 +264,10 @@ const Current = () => {
 				</div>
 			</div>
 
-			<div className="w-[76%] flex justify-center">
+			<div className=" w-[76%] flex justify-center">
 
 				{/* TASKS */}
-				<ul className="w-66 text-white">
+				<ul className=" w-66 text-white">
 					<li className="h-12" />
 					{tracker.map(task => (
 						<li
@@ -304,7 +316,7 @@ const Current = () => {
 					</ul>
 
 					{tracker.map((task, row) => (
-						<div key={task.id} className="h-16 grid grid-cols-7 place-items-center">
+						<div key={task.id} className=" h-16 grid grid-cols-7 place-items-center">
 							{task.days.map((checked, col) => {
 								const isPast = col < todayIndex
 								return (
@@ -331,13 +343,13 @@ const Current = () => {
 			{/* ACTIONS */}
 			<div className="flex gap-6 w-[76%]">
 				{canEditTasks && (
-					<button onClick={addTask} className="bg-neutral-800 h-16 w-66">
-						+ Add task
+					<button onClick={addTask} className="bg-neutral-700 rounded-xl cursor-pointer hover:bg-neutral-600/80 text-white h-16 w-66">
+						<span className='text-lg'>+</span> Add task
 					</button>
 				)}
 
 				{!isLocked && (isFirstVisit || isMonday) && (
-					<button onClick={lockTasks} className="bg-neutral-800 h-16 w-66">
+					<button onClick={lockTasks} className="bg-neutral-700 rounded-xl cursor-pointer hover:bg-neutral-600/80 text-white h-16 w-66">
 						◇ Lock tasks
 					</button>
 				)}
