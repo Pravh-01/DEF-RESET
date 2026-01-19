@@ -9,7 +9,8 @@ const Current = () => {
 		!localStorage.getItem('visitedBefore')
 	)
 
-	const isMonday = new Date().getDay() === 1
+	// const isMonday = new Date().getDay() === 1
+	const isMonday = true
 
 	const todayIndex = (() => {
 		const d = new Date().getDay()
@@ -51,8 +52,14 @@ const Current = () => {
 	// ===== SAVE TRACKER + WEEK =====
 	useEffect(() => {
 		localStorage.setItem('tracker', JSON.stringify(tracker))
-		localStorage.setItem('trackerWeek', weekKey)
-	}, [tracker, weekKey])
+	}, [tracker])
+
+	useEffect(() => {
+		if (!localStorage.getItem('trackerWeek')) {
+			localStorage.setItem('trackerWeek', getWeekKey())
+		}
+	}, [])
+
 
 	// ===== TOGGLE =====
 	const toggleDayCheck = (taskIndex, dayIndex) => {
@@ -154,10 +161,21 @@ const Current = () => {
 		const savedWeek = localStorage.getItem('trackerWeek')
 		const currentWeek = getWeekKey()
 
-		if (savedWeek && savedWeek !== currentWeek) {
-			const savedTracker = JSON.parse(localStorage.getItem('tracker'))
+		if (!savedWeek) {
+			localStorage.setItem('trackerWeek', currentWeek)
+			return
+		}
 
-			saveFinishedWeek(savedWeek, savedTracker)
+		if (savedWeek !== currentWeek) {
+			const savedTracker = JSON.parse(localStorage.getItem('tracker')) || []
+
+			const finishedWeek = {
+				weekId: savedWeek,
+				tasks: savedTracker,
+				stats: computeStats(savedTracker),
+			}
+
+			setWeeks(prev => [...prev, finishedWeek])
 
 			setTracker(
 				savedTracker.map((t, i) => ({
@@ -173,12 +191,18 @@ const Current = () => {
 		}
 	}, [])
 
-	// ===== WEEK CHANGE INTERVAL =====
 	useEffect(() => {
 		const interval = setInterval(() => {
 			const currentKey = getWeekKey()
+
 			if (currentKey !== weekKey) {
-				saveFinishedWeek(weekKey, tracker)
+				const finishedWeek = {
+					weekId: weekKey,
+					tasks: tracker,
+					stats: computeStats(tracker),
+				}
+
+				setWeeks(prev => [...prev, finishedWeek])
 
 				setTracker(prev =>
 					prev.map((t, i) => ({
@@ -195,7 +219,8 @@ const Current = () => {
 		}, 60 * 1000)
 
 		return () => clearInterval(interval)
-	}, [weekKey, tracker])
+	}, [weekKey])   // 🔴 tracker REMOVED from deps
+
 
 	// ===== LOCK =====
 	const lockTasks = () => {
@@ -269,8 +294,8 @@ const Current = () => {
 							<li
 								key={day}
 								className={`w-24 text-center ${i === todayIndex
-										? 'text-white text-shadow-[0_0_36px_white]'
-										: ''
+									? 'text-white text-shadow-[0_0_36px_white]'
+									: ''
 									}`}
 							>
 								{day}
@@ -289,11 +314,11 @@ const Current = () => {
 											if (isPast || col !== todayIndex) return
 											toggleDayCheck(row, col)
 										}}
-										className={`w-8 h-8 rounded ${checked
-												? 'bg-green-400'
-												: isPast
-													? 'bg-red-400'
-													: 'bg-white/90'
+										className={`w-8 h-8 rounded cursor-pointer ${checked
+											? 'bg-green-400'
+											: isPast
+												? 'bg-red-400'
+												: 'bg-white/90'
 											}`}
 									/>
 								)
