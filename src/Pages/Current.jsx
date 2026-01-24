@@ -168,7 +168,9 @@ const Current = () => {
 			return
 		}
 
-		if (savedWeek !== currentWeek) {
+		const isMonday = new Date().getDay() === 1
+
+		if (savedWeek !== currentWeek & isMonday) {
 			const savedTracker =
 				JSON.parse(localStorage.getItem('tracker')) || []
 
